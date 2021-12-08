@@ -1,48 +1,17 @@
 #pragma once
-#include <stdexcept>
-class PointerCounter
-{
-    size_t n_;
-public:
-    PointerCounter():n_(1){}
-    void reload()
-    {
-        n_ = 1;
-    }
-    size_t operator()() const { return n_; }
-    const PointerCounter& operator++()
-    {
-        n_++;
-        return *this;
-    }
-    const PointerCounter& operator--()
-    {
-        if (n_ == 0)
-        {
-            throw std::runtime_error(" There is no any pointer. It is impossible to reduce the PointerCounter");
-        }
-        n_--;
-        return *this;
-    }
+#include "PointerCounter.h"
+#include "DefaultDeleter.h"
 
-    explicit operator bool() const
-    {
-	    return (n_);
-    }
-};
-
-template<class Type, class TDeleter>
+template<class Type_, class TDeleter = DefaultDeleter<Type_>>
 class SharedPtr {
-    typedef SharedPtr<Type, TDeleter> t_SharedPTR;
+    typedef SharedPtr<Type_, TDeleter> t_SharedPTR;
+    typedef std::remove_extent_t<Type_> Type;
 public: // Constructors and destructor.
     SharedPtr(): pointer_counter_(new PointerCounter), ptr_(nullptr){}
-    SharedPtr(Type* pObj) :pointer_counter_(new PointerCounter), ptr_(pObj)
-    {
-        pointer_counter_->operator++();
-    }
+    SharedPtr(Type* pObj) :pointer_counter_(new PointerCounter), ptr_(pObj){}
     SharedPtr(t_SharedPTR&& uniquePTR) noexcept:pointer_counter_(uniquePTR.pointer_counter_), ptr_(uniquePTR.ptr_) // Move constructor.
     {
-        uniquePTR.pointer_counter_ = nullptr; // аааа не понимаю. ћб тут нужен просто новый, равный 0???
+        uniquePTR.pointer_counter_ = nullptr; 
         uniquePTR.ptr_ = nullptr;
     }
     SharedPtr(const t_SharedPTR& shared_ptr):pointer_counter_(shared_ptr.pointer_counter_), ptr_(shared_ptr.ptr_) {
@@ -110,7 +79,7 @@ public: // Modifiers.
         --(*pointer_counter_);
         if (!(*pointer_counter_))
         {
-            delete ptr_;
+            deleter_(ptr_);
             delete pointer_counter_;
         }
     }
@@ -127,15 +96,14 @@ public: // Modifiers.
             pointer_counter_ = nullptr;
         }
     }
-    
-    void swap(t_SharedPTR& sharedPTR) // Exchange the pointer with another object.
+    void swap(t_SharedPTR& sharedPTR) noexcept // Exchange the pointer with another object.
     {
         Type tmp{ std::move(sharedPTR) };
         sharedPTR = std::move(*this);
         *this = std::move(tmp);
     }
 private:
-    PointerCounter* pointer_counter_; // так и т€нет тут сделать smart pointer, но это странно использовать их в этой задаче, наверное
-    Type* ptr_;
-    TDeleter deleter_; //?????????
+    PointerCounter* pointer_counter_ = nullptr;
+	Type* ptr_ = nullptr;
+    TDeleter deleter_ = {}; 
 };

@@ -44,3 +44,4 @@ TEST(PointerCounterTest, bool_brackets)
 	--counter;
 	EXPECT_TRUE(! counter);
 }
+
