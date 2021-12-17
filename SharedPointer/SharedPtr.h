@@ -7,51 +7,44 @@ class SharedPtr {
     typedef SharedPtr<Type_, TDeleter> t_SharedPTR;
     typedef std::remove_extent_t<Type_> Type;
 public: // Constructors and destructor.
-    SharedPtr(): pointer_counter_(new PointerCounter), ptr_(nullptr){}
-    SharedPtr(Type* pObj) :pointer_counter_(new PointerCounter), ptr_(pObj){}
-    SharedPtr(t_SharedPTR&& uniquePTR) noexcept:pointer_counter_(uniquePTR.pointer_counter_), ptr_(uniquePTR.ptr_) // Move constructor.
+    SharedPtr() = default;
+    SharedPtr(Type* pObj)
     {
-        uniquePTR.pointer_counter_ = nullptr; 
-        uniquePTR.ptr_ = nullptr;
+        *this = pObj;
     }
-    SharedPtr(const t_SharedPTR& shared_ptr):pointer_counter_(shared_ptr.pointer_counter_), ptr_(shared_ptr.ptr_) {
-        pointer_counter_->operator++();
+    SharedPtr(t_SharedPTR&& shared_ptr) 
+    {
+        *this = shared_ptr;
+    }
+    SharedPtr(const t_SharedPTR& shared_ptr)
+    {
+        *this = shared_ptr;
     }
     ~SharedPtr()
     {
         release();
     }
 public: // Assignment.
-    t_SharedPTR& operator=(t_SharedPTR&& sharedPTR)
+    t_SharedPTR& operator=(t_SharedPTR&& shared_ptr)
     {
-        release();
-        ptr_ = sharedPTR.ptr_;
-        pointer_counter_ = sharedPTR.pointer_counter_;
-        sharedPTR.pointer_counter_ = new PointerCounter;
-        sharedPTR.ptr_ = nullptr;
+        set_ptr(shared_ptr.get(), shared_ptr.pointer_counter_, false);
+        shared_ptr.release();
         return *this;
     }
     t_SharedPTR& operator=(Type* pObject)
     {
 	    if (this->ptr_!=pObject)
 	    {
-            release();
-            ptr_ = pObject;
-            pointer_counter_->reload();
-            //pObject = nullptr;
+            set_ptr(pObject, new PointerCounter, false);
 	    }
         return *this;
     }
-    t_SharedPTR& operator=(const t_SharedPTR& sharedPTR)
+    t_SharedPTR& operator=(const t_SharedPTR& shared_ptr)
     {
-        if (this != &sharedPTR)
+        if (this != &shared_ptr)
         {
-            release();
-	        ptr_ = sharedPTR.ptr_;
-	        pointer_counter_ = sharedPTR.pointer_counter_;
-            pointer_counter_->operator++();
+            set_ptr(shared_ptr.get(), shared_ptr.pointer_counter_, true);
         }
-        
         return *this;
     }
 
@@ -62,39 +55,44 @@ public: // Observers.
     }
     Type* operator->() const // Return the stored pointer.
     {
-        return ptr_;
+        return get();
     }
     Type* get() const // Return the stored pointer.
     {
         return ptr_;
     }
-    TDeleter& get_deleter(); // Return a reference to the stored deleter.
+    TDeleter& get_deleter() // Return a reference to the stored deleter.
+    {
+        return deleter_;
+    }
     explicit operator bool() const // Return false if the stored pointer is null.
     {
-        return (ptr_);
+        return ptr_;
     }
 public: // Modifiers.
     void release() // Release ownership of any stored pointer.
     {
-        --(*pointer_counter_);
-        if (!(*pointer_counter_))
+        if(ptr_)
         {
-            deleter_(ptr_);
-            delete pointer_counter_;
+        	if (pointer_counter_)
+	        {
+		        --(*pointer_counter_);
+				if (!(*pointer_counter_))
+				{
+					deleter_(ptr_);
+					delete pointer_counter_;
+				}
+	            ptr_ = nullptr;
+	        }
+	        else if (ptr_)
+	        {
+	            throw std::runtime_error("Pointer without counter");
+	        }
         }
     }
     void reset(Type* pObject = nullptr) // Replace the stored pointer.
     {
-        release();
-        ptr_ = pObject;
-        if (pObject)
-        {
-            pointer_counter_->reload();
-        }
-        else
-        {
-            pointer_counter_ = nullptr;
-        }
+        *this = pObject;
     }
     void swap(t_SharedPTR& sharedPTR) noexcept // Exchange the pointer with another object.
     {
@@ -105,5 +103,15 @@ public: // Modifiers.
 private:
     PointerCounter* pointer_counter_ = nullptr;
 	Type* ptr_ = nullptr;
-    TDeleter deleter_ = {}; 
+    TDeleter deleter_ = {};
+    void set_ptr(Type* ptr, PointerCounter* counter, bool add)
+    {
+        release();
+        ptr_ = ptr;
+        pointer_counter_ = counter;
+        if(counter&&add)
+        {
+            pointer_counter_->operator++();
+        }
+    }
 };
