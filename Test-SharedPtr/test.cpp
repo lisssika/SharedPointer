@@ -4,6 +4,7 @@
 #include <utility>
 #include <iostream>
 #include "../SharedPointer/SharedPtr.h"
+#include <memory>
 
 TEST(PointerCounterTest, construct) {
 	const PointerCounter counter;
@@ -47,10 +48,34 @@ TEST(PointerCounterTest, bool_brackets)
 	--counter;
 	EXPECT_TRUE(! counter);
 }
+class Array final
+{
+	int* a;
+public:
+	Array()
+	{
+		a = new int[1000];
+	}
+	~Array()
+	{
+		delete[] a;
+	}
+};
+
+template<typename Type>
+class SimpleDeleter final
+{
+public:
+	void operator()(Type* pointer) const
+	{
+		delete[] pointer;
+	}
+};
 
 class MemoryLeaksDetector :public ::testing::Test
 {
 protected:
+
 	void SetUp()
 	{
 		_CrtMemCheckpoint(&sturtup_);
@@ -78,29 +103,32 @@ TEST_F(Constructors, void_constr)
 	SharedPtr<int>a{};
 }
 
-TEST_F(Constructors, simple_type)
+TEST_F(Constructors, true_shared)
 {
-	int* a = new int;
-	*a = 3;
-	SharedPtr<int> b(a);
+	Array* a = new Array[100];
+	std::shared_ptr<Array[]> b(a);
+}
+
+TEST_F(Constructors, array_of_classArray)
+{
+	Array* a = new Array[100];
+	SharedPtr<Array[]> b(a);
 }
 
 TEST_F(Constructors, several_smart_ptr)
 {
-	int* a = new int;
-	*a = 3;
-	SharedPtr<int> b(a);
+	auto a = new Array[100];
+	SharedPtr<Array[]> b(a);
 	{
-		SharedPtr<int> c(b);
-		SharedPtr<int>d(b);
+		SharedPtr<Array[]> c(b);
+		SharedPtr<Array[]>d(b);
 	}
 }
 TEST_F(Constructors, move_constr)
 {
-	int* a = new int;
-	*a = 3;
-	SharedPtr<int> b(a);
-	SharedPtr<int>(std::move(b));
+	auto a = new Array[100];
+	SharedPtr<Array[]> b(a);
+	SharedPtr<Array[]>(std::move(b));
 }
 
 class Observers: public MemoryLeaksDetector{};
@@ -148,8 +176,8 @@ class Modifiers: public MemoryLeaksDetector{};
 
 TEST_F(Modifiers, release)
 {
-	int* a = new int{ 5 };
-	SharedPtr<int>b{ a };
+	auto a = new Array[100];
+	SharedPtr<Array[]> b(a);
 	b.release();
 	EXPECT_TRUE(!b);
 }
@@ -160,5 +188,17 @@ TEST_F(Modifiers, release_empty)
 	b.release();
 	EXPECT_TRUE(!b);
 }
+class Deleter : public MemoryLeaksDetector{};
+TEST_F(Deleter, execute)
+{
+	auto a = new Array[100];
+	SharedPtr<Array[], SimpleDeleter<Array>> b(a);
+}
 
-
+TEST_F(Deleter, get)
+{
+	auto a = new Array[100];
+	SharedPtr<Array[], SimpleDeleter<Array>> b(a);
+	SimpleDeleter<Array> simpl_del = {};
+	EXPECT_EQ(typeid(b.get_deleter()).hash_code(), typeid(simpl_del).hash_code());
+}

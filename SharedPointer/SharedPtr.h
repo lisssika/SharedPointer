@@ -3,7 +3,7 @@
 #include "DefaultDeleter.h"
 
 template<class Type_, class TDeleter = DefaultDeleter<Type_>>
-class SharedPtr {
+class SharedPtr final{
     typedef SharedPtr<Type_, TDeleter> t_SharedPTR;
     typedef std::remove_extent_t<Type_> Type;
 public: // Constructors and destructor.
@@ -61,7 +61,7 @@ public: // Observers.
     {
         return ptr_;
     }
-    TDeleter& get_deleter() // Return a reference to the stored deleter.
+    TDeleter& get_deleter() const // Return a reference to the stored deleter.
     {
         return deleter_;
     }
